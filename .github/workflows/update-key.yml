@@ -8,10 +8,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: update-key
-  cancel-in-progress: true
-
 jobs:
   update-key:
     runs-on: ubuntu-latest
@@ -23,15 +19,25 @@ jobs:
       - name: Generate new key
         run: |
           python3 - <<'PY'
-          import random
+          import secrets
 
-          rng = random.SystemRandom()
-          key = "-".join(f"{rng.randrange(10000):04d}" for _ in range(4))
+          old_key = ""
+          try:
+              with open("key.txt", "r") as file:
+                  old_key = file.read().strip()
+          except FileNotFoundError:
+              pass
+
+          while True:
+              new_key = "-".join(f"{secrets.randbelow(10000):04d}" for _ in range(4))
+              if new_key != old_key:
+                  break
 
           with open("key.txt", "w") as file:
-              file.write(key + "\n")
+              file.write(new_key + "\n")
 
-          print("New key generated:", key)
+          print("Old key:", old_key)
+          print("New key:", new_key)
           PY
 
       - name: Commit and push
@@ -40,12 +46,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add key.txt
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-
           git commit -m "Update access key"
-          git pull --rebase origin main
-          git push origin main
+          git push
