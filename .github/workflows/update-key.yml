@@ -13,38 +13,65 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
-
-      - name: Generate new key
+      - name: Generate and update key.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          GH_BRANCH: main
         run: |
           python3 - <<'PY'
+          import os
+          import json
+          import base64
           import secrets
+          import urllib.request
+          import urllib.error
 
-          old_key = ""
+          token = os.environ["GH_TOKEN"]
+          repo = os.environ["GH_REPO"]
+          branch = os.environ["GH_BRANCH"]
+          path = "key.txt"
+
+          new_key = "-".join(f"{secrets.randbelow(10000):04d}" for _ in range(4))
+          print("NEW_KEY=" + new_key)
+
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+
+          get_url = f"https://api.github.com/repos/{repo}/contents/{path}?ref={branch}"
+
+          req = urllib.request.Request(get_url, headers=headers)
+          with urllib.request.urlopen(req) as res:
+              data = json.loads(res.read().decode())
+
+          old_sha = data["sha"]
+          old_content = base64.b64decode(data["content"]).decode().strip()
+          print("OLD_KEY=" + old_content)
+
+          body = {
+              "message": "Update access key",
+              "content": base64.b64encode((new_key + "\n").encode()).decode(),
+              "sha": old_sha,
+              "branch": branch,
+          }
+
+          put_url = f"https://api.github.com/repos/{repo}/contents/{path}"
+          req = urllib.request.Request(
+              put_url,
+              data=json.dumps(body).encode(),
+              headers={**headers, "Content-Type": "application/json"},
+              method="PUT"
+          )
+
           try:
-              with open("key.txt", "r") as file:
-                  old_key = file.read().strip()
-          except FileNotFoundError:
-              pass
-
-          while True:
-              new_key = "-".join(f"{secrets.randbelow(10000):04d}" for _ in range(4))
-              if new_key != old_key:
-                  break
-
-          with open("key.txt", "w") as file:
-              file.write(new_key + "\n")
-
-          print("Old key:", old_key)
-          print("New key:", new_key)
+              with urllib.request.urlopen(req) as res:
+                  result = json.loads(res.read().decode())
+                  print("UPDATED_COMMIT=" + result["commit"]["sha"])
+          except urllib.error.HTTPError as e:
+              print("ERROR_STATUS=", e.code)
+              print(e.read().decode())
+              raise
           PY
-
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add key.txt
-          git commit -m "Update access key"
-          git push
