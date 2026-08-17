@@ -19,17 +19,25 @@ jobs:
         run: |
           python3 - <<'PY'
           import random
+
           rng = random.SystemRandom()
           key = "-".join(f"{rng.randrange(10000):04d}" for _ in range(4))
 
           with open("key.txt", "w") as file:
-              file.write(key)
+              file.write(key + "\n")
           PY
 
-      - name: Commit key
+      - name: Commit and push key
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+
           git add key.txt
-          git commit -m "Update access key" || exit 0
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Update access key"
           git push
