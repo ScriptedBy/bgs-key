@@ -31,5 +31,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add key.txt
-          git commit -m "Update daily key" || exit 0
+          git commit -m "Update access key" || exit 0
           git push
