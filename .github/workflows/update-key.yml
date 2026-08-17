@@ -1,0 +1,35 @@
+name: Update Daily Key
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-key:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate key
+        run: |
+          python3 - <<'PY'
+          import random
+          rng = random.SystemRandom()
+          key = "-".join(f"{rng.randrange(10000):04d}" for _ in range(4))
+
+          with open("key.txt", "w") as file:
+              file.write(key)
+          PY
+
+      - name: Commit key
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add key.txt
+          git commit -m "Update daily key" || exit 0
+          git push
